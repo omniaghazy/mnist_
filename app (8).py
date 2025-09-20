@@ -16,6 +16,7 @@ from tensorflow.keras.models import load_model
 from PIL import Image
 import base64
 import streamlit.components.v1 as components
+import io
 
 # Load the model and cache it
 @st.cache_resource
@@ -149,7 +150,7 @@ if canvas_data:
 # Add a button to clear the canvas
 if st.button("امسح اللوحة"):
     # This just re-renders the component, effectively clearing the canvas
-    st.experimental_rerun()
+    st.rerun()
 
 
 
