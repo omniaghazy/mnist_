@@ -15,12 +15,14 @@ import numpy as np
 from tensorflow.keras.models import load_model
 from PIL import Image
 
+# Load the model and cache it
 @st.cache_resource
 def load_my_model():
     return load_model('mnist_model.h5')
 
 model = load_my_model()
 
+# Set up the Streamlit app interface
 st.title("Handwritten Digit Classifier")
 st.write("Upload an image of a handwritten digit (0-9).")
 
@@ -28,24 +30,31 @@ uploaded_file = st.file_uploader("Choose an image...", type=["png", "jpg"])
 
 if uploaded_file is not None:
     try:
+        # Open and preprocess the image
         img = Image.open(uploaded_file).convert('L')
         img = img.resize((28, 28))
-
+        
+        # Display the uploaded image
         st.image(img, caption='Uploaded Image', use_container_width=True)
         st.write("")
-
+        
+        # Convert image to numpy array and normalize
         img_array = np.array(img).astype('float32') / 255.0
-
+        
         # Invert colors to match MNIST dataset format (white digit on black background)
         img_array = 1.0 - img_array
-
+        
+        # Reshape for the model
         img_array = img_array.reshape(1, 784)
-
+        
+        # Make a prediction
         predictions = model.predict(img_array)
         predicted_class = np.argmax(predictions)
-
+        
         st.success(f"Prediction: {predicted_class}")
-
+        
     except Exception as e:
         st.error(f"Error: {e}")
+
+
 
