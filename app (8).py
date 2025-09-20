@@ -14,6 +14,8 @@ import streamlit as st
 import numpy as np
 from tensorflow.keras.models import load_model
 from PIL import Image
+import base64
+import streamlit.components.v1 as components
 
 # Load the model and cache it
 @st.cache_resource
@@ -22,27 +24,115 @@ def load_my_model():
 
 model = load_my_model()
 
-# Set up the Streamlit app interface
+# --- Drawing Canvas with Embedded HTML/JS ---
 st.title("Handwritten Digit Classifier")
-st.write("Upload an image of a handwritten digit (0-9).")
+st.write("ارسم رقم (0-9) في المربع الأسود أدناه.")
 
-uploaded_file = st.file_uploader("Choose an image...", type=["png", "jpg"])
+# The core HTML/JS code for the drawing canvas
+canvas_code = """
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+    body {
+        margin: 0;
+        overflow: hidden;
+        background-color: #f0f2f6;
+    }
+    #myCanvas {
+        border: 2px solid black;
+        background-color: #000000;
+    }
+</style>
+</head>
+<body>
+<canvas id="myCanvas" width="280" height="280"></canvas>
+<script>
+    const canvas = document.getElementById('myCanvas');
+    const ctx = canvas.getContext('2d');
+    let isDrawing = false;
+    let lastX = 0;
+    let lastY = 0;
 
-if uploaded_file is not None:
-    try:
-        # Open and preprocess the image
-        img = Image.open(uploaded_file).convert('L')
-        img = img.resize((28, 28))
+    function getMousePos(canvas, evt) {
+        const rect = canvas.getBoundingClientRect();
+        return {
+            x: evt.clientX - rect.left,
+            y: evt.clientY - rect.top
+        };
+    }
+
+    function draw(e) {
+        if (!isDrawing) return;
         
-        # Display the uploaded image
-        st.image(img, caption='Uploaded Image', use_container_width=True)
-        st.write("")
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 15;
+        ctx.lineCap = 'round';
+        ctx.lineTo(getMousePos(canvas, e).x, getMousePos(canvas, e).y);
+        ctx.stroke();
+        [lastX, lastY] = [getMousePos(canvas, e).x, getMousePos(canvas, e).y];
+    }
+
+    canvas.addEventListener('mousedown', (e) => {
+        isDrawing = true;
+        [lastX, lastY] = [getMousePos(canvas, e).x, getMousePos(canvas, e).y];
+        ctx.moveTo(lastX, lastY);
+    });
+
+    canvas.addEventListener('mousemove', draw);
+    canvas.addEventListener('mouseup', () => {
+        isDrawing = false;
+        sendDataToStreamlit();
+    });
+
+    canvas.addEventListener('mouseout', () => isDrawing = false);
+
+    // For touch devices
+    canvas.addEventListener('touchstart', (e) => {
+        isDrawing = true;
+        e.preventDefault();
+        const touch = e.touches[0];
+        [lastX, lastY] = [getMousePos(canvas, touch).x, getMousePos(canvas, touch).y];
+        ctx.moveTo(lastX, lastY);
+    });
+
+    canvas.addEventListener('touchmove', (e) => {
+        if (!isDrawing) return;
+        e.preventDefault();
+        const touch = e.touches[0];
+        ctx.lineTo(getMousePos(canvas, touch).x, getMousePos(canvas, touch).y);
+        ctx.stroke();
+    });
+
+    canvas.addEventListener('touchend', () => {
+        isDrawing = false;
+        sendDataToStreamlit();
+    });
+
+    function sendDataToStreamlit() {
+        const dataURL = canvas.toDataURL('image/png');
+        window.parent.postMessage({
+            type: 'streamlit:setComponentValue',
+            value: dataURL
+        }, '*');
+    }
+</script>
+</body>
+</html>
+"""
+
+# Render the canvas and get the drawing data
+canvas_data = components.html(canvas_code, height=300, width=300)
+
+if canvas_data:
+    try:
+        # Decode the base64 image data from the canvas
+        img_bytes = base64.b64decode(canvas_data.split(',')[1])
+        img = Image.open(io.BytesIO(img_bytes)).convert('L')
+        img = img.resize((28, 28))
         
         # Convert image to numpy array and normalize
         img_array = np.array(img).astype('float32') / 255.0
-        
-        # Invert colors to match MNIST dataset format (white digit on black background)
-        img_array = 1.0 - img_array
         
         # Reshape for the model
         img_array = img_array.reshape(1, 784)
@@ -55,6 +145,11 @@ if uploaded_file is not None:
         
     except Exception as e:
         st.error(f"Error: {e}")
+
+# Add a button to clear the canvas
+if st.button("امسح اللوحة"):
+    # This just re-renders the component, effectively clearing the canvas
+    st.experimental_rerun()
 
 
 
