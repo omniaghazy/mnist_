@@ -25,132 +25,154 @@ def load_my_model():
 
 model = load_my_model()
 
-# --- Drawing Canvas with Embedded HTML/JS ---
 st.title("Handwritten Digit Classifier")
-st.write("ارسم رقم (0-9) في المربع الأسود أدناه.")
+st.write("اختر طريقة التخمين:")
 
-# The core HTML/JS code for the drawing canvas
-canvas_code = """
-<!DOCTYPE html>
-<html>
-<head>
-<style>
-    body {
-        margin: 0;
-        overflow: hidden;
-        background-color: #f0f2f6;
-    }
-    #myCanvas {
-        border: 2px solid black;
-        background-color: #000000;
-    }
-</style>
-</head>
-<body>
-<canvas id="myCanvas" width="280" height="280"></canvas>
-<script>
-    const canvas = document.getElementById('myCanvas');
-    const ctx = canvas.getContext('2d');
-    let isDrawing = false;
-    let lastX = 0;
-    let lastY = 0;
+# Create two tabs for the two options
+tab1, tab2 = st.tabs(["ارسم الرقم", "ارفع صورة"])
 
-    function getMousePos(canvas, evt) {
-        const rect = canvas.getBoundingClientRect();
-        return {
-            x: evt.clientX - rect.left,
-            y: evt.clientY - rect.top
-        };
-    }
+with tab1:
+    st.write("ارسم رقم (0-9) في المربع الأسود أدناه.")
 
-    function draw(e) {
-        if (!isDrawing) return;
-        
-        ctx.strokeStyle = '#FFFFFF';
-        ctx.lineWidth = 15;
-        ctx.lineCap = 'round';
-        ctx.lineTo(getMousePos(canvas, e).x, getMousePos(canvas, e).y);
-        ctx.stroke();
-        [lastX, lastY] = [getMousePos(canvas, e).x, getMousePos(canvas, e).y];
-    }
+    # The core HTML/JS code for the drawing canvas
+    canvas_code = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #f0f2f6;
+        }
+        #myCanvas {
+            border: 2px solid black;
+            background-color: #000000;
+        }
+    </style>
+    </head>
+    <body>
+    <canvas id="myCanvas" width="280" height="280"></canvas>
+    <script>
+        const canvas = document.getElementById('myCanvas');
+        const ctx = canvas.getContext('2d');
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
 
-    canvas.addEventListener('mousedown', (e) => {
-        isDrawing = true;
-        [lastX, lastY] = [getMousePos(canvas, e).x, getMousePos(canvas, e).y];
-        ctx.moveTo(lastX, lastY);
-    });
+        function getMousePos(canvas, evt) {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: evt.clientX - rect.left,
+                y: evt.clientY - rect.top
+            };
+        }
 
-    canvas.addEventListener('mousemove', draw);
-    canvas.addEventListener('mouseup', () => {
-        isDrawing = false;
-        sendDataToStreamlit();
-    });
+        function draw(e) {
+            if (!isDrawing) return;
+            
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = 15;
+            ctx.lineCap = 'round';
+            ctx.lineTo(getMousePos(canvas, e).x, getMousePos(canvas, e).y);
+            ctx.stroke();
+            [lastX, lastY] = [getMousePos(canvas, e).x, getMousePos(canvas, e).y];
+        }
 
-    canvas.addEventListener('mouseout', () => isDrawing = false);
+        canvas.addEventListener('mousedown', (e) => {
+            isDrawing = true;
+            [lastX, lastY] = [getMousePos(canvas, e).x, getMousePos(canvas, e).y];
+            ctx.moveTo(lastX, lastY);
+        });
 
-    // For touch devices
-    canvas.addEventListener('touchstart', (e) => {
-        isDrawing = true;
-        e.preventDefault();
-        const touch = e.touches[0];
-        [lastX, lastY] = [getMousePos(canvas, touch).x, getMousePos(canvas, touch).y];
-        ctx.moveTo(lastX, lastY);
-    });
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', () => {
+            isDrawing = false;
+            sendDataToStreamlit();
+        });
 
-    canvas.addEventListener('touchmove', (e) => {
-        if (!isDrawing) return;
-        e.preventDefault();
-        const touch = e.touches[0];
-        ctx.lineTo(getMousePos(canvas, touch).x, getMousePos(canvas, touch).y);
-        ctx.stroke();
-    });
+        canvas.addEventListener('mouseout', () => isDrawing = false);
 
-    canvas.addEventListener('touchend', () => {
-        isDrawing = false;
-        sendDataToStreamlit();
-    });
+        // For touch devices
+        canvas.addEventListener('touchstart', (e) => {
+            isDrawing = true;
+            e.preventDefault();
+            const touch = e.touches[0];
+            [lastX, lastY] = [getMousePos(canvas, touch).x, getMousePos(canvas, touch).y];
+            ctx.moveTo(lastX, lastY);
+        });
 
-    function sendDataToStreamlit() {
-        const dataURL = canvas.toDataURL('image/png');
-        window.parent.postMessage({
-            type: 'streamlit:setComponentValue',
-            value: dataURL
-        }, '*');
-    }
-</script>
-</body>
-</html>
-"""
+        canvas.addEventListener('touchmove', (e) => {
+            if (!isDrawing) return;
+            e.preventDefault();
+            const touch = e.touches[0];
+            ctx.lineTo(getMousePos(canvas, touch).x, getMousePos(canvas, touch).y);
+            ctx.stroke();
+        });
 
-# Render the canvas and get the drawing data
-canvas_data = components.html(canvas_code, height=300, width=300)
+        canvas.addEventListener('touchend', () => {
+            isDrawing = false;
+            sendDataToStreamlit();
+        });
 
-if canvas_data:
-    try:
-        # Decode the base64 image data from the canvas
-        img_bytes = base64.b64decode(canvas_data.split(',')[1])
-        img = Image.open(io.BytesIO(img_bytes)).convert('L')
-        img = img.resize((28, 28))
-        
-        # Convert image to numpy array and normalize
-        img_array = np.array(img).astype('float32') / 255.0
-        
-        # Reshape for the model
-        img_array = img_array.reshape(1, 784)
-        
-        # Make a prediction
-        predictions = model.predict(img_array)
-        predicted_class = np.argmax(predictions)
-        
-        st.success(f"Prediction: {predicted_class}")
-        
-    except Exception as e:
-        st.error(f"Error: {e}")
+        function sendDataToStreamlit() {
+            const dataURL = canvas.toDataURL('image/png');
+            window.parent.postMessage({
+                type: 'streamlit:setComponentValue',
+                value: dataURL
+            }, '*');
+        }
+    </script>
+    </body>
+    </html>
+    """
 
-# Add a button to clear the canvas
-if st.button("امسح اللوحة"):
-    # This just re-renders the component, effectively clearing the canvas
-    st.rerun()
+    # Render the canvas and get the drawing data
+    canvas_data = components.html(canvas_code, height=300, width=300)
 
+    if canvas_data:
+        try:
+            img_bytes = base64.b64decode(canvas_data.split(',')[1])
+            img = Image.open(io.BytesIO(img_bytes)).convert('L')
+            img = img.resize((28, 28))
+            
+            img_array = np.array(img).astype('float32') / 255.0
+            img_array = img_array.reshape(1, 784)
+            
+            predictions = model.predict(img_array)
+            predicted_class = np.argmax(predictions)
+            
+            st.success(f"Prediction: {predicted_class}")
+            
+        except Exception as e:
+            st.error(f"Error: {e}")
 
+    # Add a button to clear the canvas
+    if st.button("امسح اللوحة"):
+        st.rerun()
+
+with tab2:
+    st.write("ارفع صورة لرقم مكتوب بخط اليد.")
+
+    uploaded_file = st.file_uploader("اختر صورة...", type=["png", "jpg"])
+
+    if uploaded_file is not None:
+        try:
+            img = Image.open(uploaded_file).convert('L')
+            img = img.resize((28, 28))
+            
+            st.image(img, caption='Uploaded Image', use_container_width=True)
+            
+            if st.button("تخمين"):
+                img_array = np.array(img).astype('float32') / 255.0
+                img_array = 1.0 - img_array
+                img_array = img_array.reshape(1, 784)
+                
+                predictions = model.predict(img_array)
+                predicted_class = np.argmax(predictions)
+                
+                st.success(f"Prediction: {predicted_class}")
+                
+        except Exception as e:
+            st.error(f"Error: {e}")
 
